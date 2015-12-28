@@ -212,9 +212,83 @@ def post_to_foods():
         cart[food_id] += 1 
     elif action == '-' and cart.get(food_id, 0) > 0:
         cart[food_id] -= 1 
+        if cart[food_id] == 0:
+            del cart[food_id]
 
     return flask.redirect(flask.request.url, code=303)
 
+@app.route('/order', methods=['GET'])
+def order():
+    foods = []
+    if 'cart' not in flask.session:
+        flask.session['cart'] = {}
+    for food_id, quantity in flask.session['cart'].items():
+        food_response = requests.get(service_uris['foods'] + '/' + food_id)
+        if food_response.status_code != 200:
+            return flask.render_template('error.html', reason=food_response.json()), 500
+
+        food = food_response.json()
+        foods.append({
+            'name': food['name'],
+            'price': food['price'],
+            'quantity': quantity,
+        })
+
+    return flask.render_template('order.html', foods=foods)
+
+@app.route('/order', methods=['POST'])
+def post_to_order():
+    order_items = []
+    for food_id, quantity in flask.session['cart'].items():
+        order_items.append({
+            'food_id': int(food_id),
+            'quantity': quantity,
+        })
+
+    order_response = requests.post(service_uris['orders'], json={
+        'user_id': flask.session.user_id,
+        'opened_at': render_datetime(datetime.now()),
+        'items': order_items,
+        'deliver_to': flask.request.form['deliver_to'],
+    })
+    if order_response.status_code != 201:
+        return flask.render_template('error.html', reason=order_response.json()), 500
+
+    del flask.session['cart']
+
+    return flask.redirect('/orders/', code=303)
+
+@app.route('/orders/', methods=['GET'])
+def orders():
+    if flask.session.user_id is None:
+        flask.session['redirect_to'] = '/orders/'
+        return flask.redirect('/sign_in')
+
+    user_name = None
+    if flask.session.user_id is not None:
+        user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
+        if user_response.status_code != 200:
+            return flask.render_template('error.html', reason=user_response.json()), 500
+
+        user = user_response.json()
+        user_name = user['name']
+
+    orders_response = requests.get(service_uris['orders'], params={
+        'q': simplejson.dumps({
+            'filters': [
+                {'name': 'user_id', 'op': '==', 'val': flask.session.user_id},    
+            ],
+        }),
+    })
+    if orders_response.status_code != 200:
+        return flask.render_template('error.html', reason=orders_response.json()), 500
+    
+    orders = orders_response.json()
+
+    orders = orders['objects']
+
+    return flask.render_template('orders.html', user_name=user_name,
+                                                orders=orders)
 
 if __name__ == '__main__':
     app.run(port=config['website']['port'])

@@ -13,29 +13,35 @@
       <a href="/sign_in?redirect_to={{ here() | urlencode }}">Sign in!</a>
     {% else %}
       <a href="/me">{{ user_name }}</a>
+
+      <a href="/order">Order!</a>
     {% endif%}
     <table>
       <tbody>
         <th>Name</th>
         <th>Price</th>
-        <th>Quantity in cart</th>
+        {% if user_name is not none %}
+          <th>Quantity in cart</th>
+        {% endif %}
         {% for food in page_foods %}
           <tr>
             <td style="text-align:right;border:1px solid">{{ food['name'] }}</td>
             <td style="text-align:right;border:1px solid">{{ food['price'] }}</td>
-            <td style="text-align:right;border:1px solid">
-              {{ food['quantity'] }}
-              <form method="POST" action="{{ here() }}" style="display:inline">
-                <input type="hidden" name="food_id" value="{{food['id']}}"></input>
-                <input type="hidden" name="action" value="+"></input>
-                <input type="submit" value="+"></input>
-              </form>
-              <form method="POST" action="{{ here() }}" style="display:inline">
-                <input type="hidden" name="food_id" value="{{food['id']}}"></input>
-                <input type="hidden" name="action" value="-"></input>
-                <input type="submit" value="-"></input>
-              </form>
-            </td>
+            {% if user_name is not none %}
+              <td style="text-align:right;border:1px solid">
+                {{ food['quantity'] }}
+                <form method="POST" action="{{ here() }}" style="display:inline">
+                  <input type="hidden" name="food_id" value="{{food['id']}}"></input>
+                  <input type="hidden" name="action" value="+"></input>
+                  <input type="submit" value="+"></input>
+                </form>
+                <form method="POST" action="{{ here() }}" style="display:inline">
+                  <input type="hidden" name="food_id" value="{{food['id']}}"></input>
+                  <input type="hidden" name="action" value="-"></input>
+                  <input type="submit" value="-"></input>
+                </form>
+              </td>
+            {% endif %}
           </tr>  
         {% endfor %}
       </tbody>

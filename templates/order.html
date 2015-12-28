@@ -1,0 +1,43 @@
+{% extends "page.html" %}
+
+{% macro here() -%}
+  /order
+{%- endmacro %}
+
+{% block title %}Order - {{ super() }}{% endblock %}
+
+{% block body %}
+  <h1>Order</h1>
+  <form method="POST">
+    <table>
+      <tbody>
+        <th>Name</th>
+        <th>Price</th>
+        <th>Quantity</th>
+        {% for food in foods %}
+          <tr>
+            <td style="text-align:right;border:1px solid">{{ food['name'] }}</td>
+            <td style="text-align:right;border:1px solid">{{ food['price'] }}</td>
+            <td style="text-align:right;border:1px solid">{{ food['quantity'] }}</td>
+          </tr>  
+        {% endfor %}
+      </tbody>
+    </table>
+    <table>
+      <tbody>
+        <tr>
+          <td style="text-align:right">Deliver to:</td>
+          <td>
+            <input name="deliver_to"></input>
+          </td>
+        </tr>  
+        <tr>
+          <td></td>
+          <td style="text-align:right">
+            <input type="submit" value="Order!"></input>
+          </td>
+        </tr>  
+      </tbody>
+    </table>
+  </form>
+{% endblock  %}
