@@ -1,22 +1,41 @@
 {% extends "page.html" %}
 
+{% macro here() -%}
+  /foods/?per_page={{ per_page }}&page={{ page }}
+{%- endmacro %}
+
 {% block title %}Foods - {{ super() }}{% endblock %}
 
 {% block body %}
   <h1>Foods</h1>
   <form method="POST">
     {% if user_name is none %}
-    <a href="/sign_in?redirect_to={{ '/foods?per_page=' | urlencode }}{{ per_page }}{{ '&page=' | urlencode }}{{ page }}">Sign in!</a>
+      <a href="/sign_in?redirect_to={{ here() | urlencode }}">Sign in!</a>
     {% else %}
       <a href="/me">{{ user_name }}</a>
     {% endif%}
     <table>
       <tbody>
+        <th>Name</th>
+        <th>Price</th>
+        <th>Quantity in cart</th>
         {% for food in page_foods %}
           <tr>
-            <td>{{ food['name'] }}</td>
-            <td style="text-align:right">{{ food['price'] }}</td>
-            <td style="text-align:right">{{ food['quantity'] }}</td>
+            <td style="text-align:right;border:1px solid">{{ food['name'] }}</td>
+            <td style="text-align:right;border:1px solid">{{ food['price'] }}</td>
+            <td style="text-align:right;border:1px solid">
+              {{ food['quantity'] }}
+              <form method="POST" action="{{ here() }}" style="display:inline">
+                <input type="hidden" name="food_id" value="{{food['id']}}"></input>
+                <input type="hidden" name="action" value="+"></input>
+                <input type="submit" value="+"></input>
+              </form>
+              <form method="POST" action="{{ here() }}" style="display:inline">
+                <input type="hidden" name="food_id" value="{{food['id']}}"></input>
+                <input type="hidden" name="action" value="-"></input>
+                <input type="submit" value="-"></input>
+              </form>
+            </td>
           </tr>  
         {% endfor %}
       </tbody>

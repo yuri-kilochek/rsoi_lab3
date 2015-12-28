@@ -184,9 +184,10 @@ def foods():
 
     foods = foods_response.json()
 
-    flask.session.setdefault('cart', {})
+    if 'cart' not in flask.session:
+        flask.session['cart'] = {}
     for food in foods['objects']:
-        food['quantity'] = flask.session['cart'].get(food['id'], 0)
+        food['quantity'] = flask.session['cart'].get(str(food['id']), 0)
 
     pages = foods['total_pages']
     page_foods = foods['objects']
@@ -196,6 +197,23 @@ def foods():
                                                per_page=per_page,
                                                page=page,
                                                pages=pages)
+
+@app.route('/foods/', methods=['POST'])
+def post_to_foods():
+    food_id = flask.request.form['food_id']
+    action = flask.request.form['action']
+
+    cart = flask.session['cart']
+
+    if food_id not in cart:
+        cart[food_id] = 0
+
+    if action == '+':
+        cart[food_id] += 1 
+    elif action == '-' and cart.get(food_id, 0) > 0:
+        cart[food_id] -= 1 
+
+    return flask.redirect(flask.request.url, code=303)
 
 
 if __name__ == '__main__':
