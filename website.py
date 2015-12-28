@@ -30,7 +30,7 @@ class Session(dict, flask.sessions.SessionMixin):
         self.clear()
         self.update(data)
 
-    def serialize(self):
+    def to_json(self):
         return {
             'user_id': self.user_id,
             'last_used_at': render_datetime(datetime.now()),
@@ -39,30 +39,38 @@ class Session(dict, flask.sessions.SessionMixin):
        
 class SessionInterface(flask.sessions.SessionInterface):
     def open_session(self, app, request):
-        if 'session_id' in request.cookies:
-            session_response = requests.get(service_uris['sessions'] + '/' + request.cookies['session_id'])
-            if session_response.status_code == 200:
+        try:
+            if 'session_id' in request.cookies:
+                session_response = requests.get(service_uris['sessions'] + '/' + request.cookies['session_id'])
+                if session_response.status_code == 200:
+                    session = session_response.json()
+                    if parse_datetime(session['last_used_at']) + config['website']['session_expires_after'] > datetime.now():
+                        return Session(session)
+
+            session_response = requests.post(service_uris['sessions'], json={
+                'last_used_at': render_datetime(datetime.now()),
+            })
+            if session_response.status_code == 201:
                 session = session_response.json()
-                if parse_datetime(session['last_used_at']) + config['website']['session_expires_after'] > datetime.now():
-                    return Session(session)
-
-        session_response = requests.post(service_uris['sessions'], json={
-            'last_used_at': render_datetime(datetime.now()),
-        })
-        if session_response.status_code == 201:
-            session = session_response.json()
-            return Session(session)
-
-        return None
+                return Session(session)
+        except requests.exceptions.RequestException:
+            return Session({
+                'id': None,
+                'user_id': None,
+                'data_items': [],
+            })
 
     def save_session(self, app, session, response):
         if session.id is None:
             response.set_cookie('session_id', '', expires=0)
             return
 
-        session_response = requests.patch(service_uris['sessions'] + '/' + str(session.id), json=session.serialize())
-        if session_response.status_code == 200:
-            response.set_cookie('session_id', str(session.id))
+        try:
+            session_response = requests.patch(service_uris['sessions'] + '/' + str(session.id), json=session.to_json())
+            if session_response.status_code == 200:
+                response.set_cookie('session_id', str(session.id))
+        except requests.exceptions.RequestException:
+            pass
 
 app.session_interface = SessionInterface()
 
@@ -84,13 +92,17 @@ def register():
 
 @app.route('/register', methods=['POST'])
 def post_to_register():
-    user_response = requests.post(service_uris['users'], json={
-        'login': flask.request.form['login'],
-        'password_hash': hash_password(flask.request.form['password']),
-        'name': flask.request.form.get('name', None),
-        'phone': flask.request.form.get('phone', None),
-        'email': flask.request.form.get('email', None),
-    })
+    try:
+        user_response = requests.post(service_uris['users'], json={
+            'login': flask.request.form['login'],
+            'password_hash': hash_password(flask.request.form['password']),
+            'name': flask.request.form.get('name', None),
+            'phone': flask.request.form.get('phone', None),
+            'email': flask.request.form.get('email', None),
+        })
+    except requests.exceptions.RequestException:
+        return flask.render_template('error.html', reason='Users backend is unavailable'), 500
+
     if user_response.status_code == 201:
         user = user_response.json()
         flask.session.user_id = user['id']
@@ -103,24 +115,27 @@ def post_to_register():
 def sign_in():
     if 'redirect_to' in flask.request.args:
         flask.session['redirect_to'] = urldecode(flask.request.args['redirect_to'])
-        print(flask.session['redirect_to'])
 
     if flask.session.user_id is not None:
-        return flask.redirect('/profile')
+        return flask.redirect('/me')
 
     return flask.render_template('sign_in.html')
 
 @app.route('/sign_in', methods=['POST'])
 def post_to_sign_in():
-    user_response = requests.get(service_uris['users'], params={
-        'q': simplejson.dumps({
-            'filters': [
-                {'name': 'login', 'op': '==', 'val': flask.request.form['login']},    
-                {'name': 'password_hash', 'op': '==', 'val': hash_password(flask.request.form['password'])},    
-            ],
-            'single': True,
-        }),
-    })
+    try:
+        user_response = requests.get(service_uris['users'], params={
+            'q': simplejson.dumps({
+                'filters': [
+                    {'name': 'login', 'op': '==', 'val': flask.request.form['login']},    
+                    {'name': 'password_hash', 'op': '==', 'val': hash_password(flask.request.form['password'])},    
+                ],
+                'single': True,
+            }),
+        })
+    except requests.exceptions.RequestException:
+        return flask.render_template('error.html', reason='Users backend is unavailable'), 500
+
     if user_response.status_code == 200:
         user = user_response.json()
         flask.session.user_id = user['id']
@@ -135,12 +150,14 @@ def me():
         flask.session['redirect_to'] = '/me'
         return flask.redirect('/sign_in')
 
-    user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
-    if user_response.status_code == 200:
+    try:
+        user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
+        assert user_response.status_code == 200
         user = user_response.json()
-        return flask.render_template('me.html', user=user)
+    except requests.exceptions.RequestException:
+        user = None
 
-    return flask.render_template('error.html', reason=user_response.json()), 500
+    return flask.render_template('me.html', user=user)
 
 
 @app.route('/me', methods=['POST'])
@@ -154,7 +171,12 @@ def patch_me():
         user['phone'] = flask.request.form['phone'] or None
     if 'email' in flask.request.form:
         user['email'] = flask.request.form['email'] or None
-    user_response = requests.patch(service_uris['users'] + '/' + str(flask.session.user_id), json=user)
+
+    try:
+        user_response = requests.patch(service_uris['users'] + '/' + str(flask.session.user_id), json=user)
+    except requests.exceptions.RequestException:
+        return flask.render_template('error.html', reason='Users backend is unavailable'), 500
+
     if user_response.status_code == 200:
         user = user_response.json()
         return flask.render_template('me.html', user=user)
@@ -166,31 +188,38 @@ def patch_me():
 def foods():
     user_name = None
     if flask.session.user_id is not None:
-        user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
-        if user_response.status_code != 200:
-            return flask.render_template('error.html', reason=user_response.json()), 500
+        try:
+            user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
+            if user_response.status_code != 200:
+                return flask.render_template('error.html', reason=user_response.json()), 500
 
-        user = user_response.json()
-        user_name = user['name']
+            user = user_response.json()
+            user_name = user['name']
+        except requests.exceptions.RequestException:
+            pass
 
-    per_page = int(flask.request.args.get('per_page', 20))
-    page = int(flask.request.args.get('page', 1))
-    foods_response = requests.get(service_uris['foods'], params={
-        'results_per_page': per_page,
-        'page': page,
-    })
-    if foods_response.status_code != 200:
-        return flask.render_template('error.html', reason=foods_response.json()), 500
+    try:
+        per_page = int(flask.request.args.get('per_page', 20))
+        page = int(flask.request.args.get('page', 1))
 
-    foods = foods_response.json()
+        foods_response = requests.get(service_uris['foods'], params={
+            'results_per_page': per_page,
+            'page': page,
+        })
+        assert foods_response.status_code == 200
 
-    if 'cart' not in flask.session:
-        flask.session['cart'] = {}
-    for food in foods['objects']:
-        food['quantity'] = flask.session['cart'].get(str(food['id']), 0)
+        foods = foods_response.json()
 
-    pages = foods['total_pages']
-    page_foods = foods['objects']
+        if 'cart' not in flask.session:
+            flask.session['cart'] = {}
+        for food in foods['objects']:
+            food['quantity'] = flask.session['cart'].get(str(food['id']), 0)
+
+        pages = foods['total_pages']
+        page_foods = foods['objects']
+    except requests.exceptions.RequestException:
+        pages = 0
+        page_foods = None
 
     return flask.render_template('foods.html', user_name=user_name,
                                                page_foods=page_foods,
@@ -223,16 +252,18 @@ def order():
     if 'cart' not in flask.session:
         flask.session['cart'] = {}
     for food_id, quantity in flask.session['cart'].items():
-        food_response = requests.get(service_uris['foods'] + '/' + food_id)
-        if food_response.status_code != 200:
-            return flask.render_template('error.html', reason=food_response.json()), 500
+        try:
+            food_response = requests.get(service_uris['foods'] + '/' + food_id)
+            assert food_response.status_code == 200
 
-        food = food_response.json()
-        foods.append({
-            'name': food['name'],
-            'price': food['price'],
-            'quantity': quantity,
-        })
+            food = food_response.json()
+            foods.append({
+                'name': food['name'],
+                'price': food['price'],
+                'quantity': quantity,
+            })
+        except requests.exceptions.RequestException:
+            pass
 
     return flask.render_template('order.html', foods=foods)
 
@@ -245,16 +276,18 @@ def post_to_order():
             'quantity': quantity,
         })
 
-    order_response = requests.post(service_uris['orders'], json={
-        'user_id': flask.session.user_id,
-        'opened_at': render_datetime(datetime.now()),
-        'items': order_items,
-        'deliver_to': flask.request.form['deliver_to'],
-    })
-    if order_response.status_code != 201:
-        return flask.render_template('error.html', reason=order_response.json()), 500
+    try:
+        order_response = requests.post(service_uris['orders'], json={
+            'user_id': flask.session.user_id,
+            'opened_at': render_datetime(datetime.now()),
+            'items': order_items,
+            'deliver_to': flask.request.form['deliver_to'],
+        })
+        assert order_response.status_code == 201
 
-    del flask.session['cart']
+        del flask.session['cart']
+    except requests.exceptions.RequestException:
+        pass
 
     return flask.redirect('/orders/', code=303)
 
@@ -266,26 +299,29 @@ def orders():
 
     user_name = None
     if flask.session.user_id is not None:
-        user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
-        if user_response.status_code != 200:
-            return flask.render_template('error.html', reason=user_response.json()), 500
+        try:
+            user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
+            if user_response.status_code != 200:
+                return flask.render_template('error.html', reason=user_response.json()), 500
 
-        user = user_response.json()
-        user_name = user['name']
+            user = user_response.json()
+            user_name = user['name']
+        except requests.exceptions.RequestException:
+            pass
 
-    orders_response = requests.get(service_uris['orders'], params={
-        'q': simplejson.dumps({
-            'filters': [
-                {'name': 'user_id', 'op': '==', 'val': flask.session.user_id},    
-            ],
-        }),
-    })
-    if orders_response.status_code != 200:
-        return flask.render_template('error.html', reason=orders_response.json()), 500
-    
-    orders = orders_response.json()
-
-    orders = orders['objects']
+    try:
+        orders_response = requests.get(service_uris['orders'], params={
+            'q': simplejson.dumps({
+                'filters': [
+                    {'name': 'user_id', 'op': '==', 'val': flask.session.user_id},    
+                ],
+            }),
+        })
+        assert orders_response.status_code == 200
+        orders = orders_response.json()
+        orders = orders['objects']
+    except requests.exceptions.RequestException:
+        orders = None
 
     return flask.render_template('orders.html', user_name=user_name,
                                                 orders=orders)

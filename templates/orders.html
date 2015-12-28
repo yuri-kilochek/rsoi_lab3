@@ -9,26 +9,32 @@
 {% block body %}
   <h1>Foods</h1>
   <form method="POST">
-    <a href="/me">{{ user_name }}</a>
-    <table>
-      <tbody>
-        <th>Opened on</th>
-        <th>Deliver to</th>
-        {% if user_name is not none %}
-          <th>Closed on</th>
-        {% endif %}
-        {% for order in orders %}
-          <tr>
-            <td style="text-align:right;border:1px solid">{{ order['opened_at'] }}</td>
-            <td style="text-align:right;border:1px solid">{{ order['deliver_to'] }}</td>
-            <td style="text-align:right;border:1px solid">
-              {% if order['closed_at'] is not none %}
-                {{ order['closed_at'] }}
-              {% endif %}
-            </td>
-          </tr>  
-        {% endfor %}
-      </tbody>
-    </table>
+    {% if user_name is not none %}
+      <a href="/me">{{ user_name }}</a>
+    {% endif%}
+    {% if orders is not none %}
+      <table>
+        <tbody>
+          <th>Opened on</th>
+          <th>Deliver to</th>
+          {% if user_name is not none %}
+            <th>Closed on</th>
+          {% endif %}
+          {% for order in orders %}
+            <tr>
+              <td style="text-align:right;border:1px solid">{{ order['opened_at'] }}</td>
+              <td style="text-align:right;border:1px solid">{{ order['deliver_to'] }}</td>
+              <td style="text-align:right;border:1px solid">
+                {% if order['closed_at'] is not none %}
+                  {{ order['closed_at'] }}
+                {% endif %}
+              </td>
+            </tr>  
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>Error: <em>Orders not available</em></p>
+    {% endif %}
   </form>
 {% endblock  %}

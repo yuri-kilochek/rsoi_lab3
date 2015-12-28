@@ -16,49 +16,53 @@
 
       <a href="/order">Order!</a>
     {% endif%}
-    <table>
-      <tbody>
-        <th>Name</th>
-        <th>Price</th>
-        {% if user_name is not none %}
-          <th>Quantity in cart</th>
+    {% if page_foods is not none %}
+      <table>
+        <tbody>
+          <th>Name</th>
+          <th>Price</th>
+          {% if user_name is not none %}
+            <th>Quantity in cart</th>
+          {% endif %}
+          {% for food in page_foods %}
+            <tr>
+              <td style="text-align:right;border:1px solid">{{ food['name'] }}</td>
+              <td style="text-align:right;border:1px solid">{{ food['price'] }}</td>
+              {% if user_name is not none %}
+                <td style="text-align:right;border:1px solid">
+                  {{ food['quantity'] }}
+                  <form method="POST" action="{{ here() }}" style="display:inline">
+                    <input type="hidden" name="food_id" value="{{food['id']}}"></input>
+                    <input type="hidden" name="action" value="+"></input>
+                    <input type="submit" value="+"></input>
+                  </form>
+                  <form method="POST" action="{{ here() }}" style="display:inline">
+                    <input type="hidden" name="food_id" value="{{food['id']}}"></input>
+                    <input type="hidden" name="action" value="-"></input>
+                    <input type="submit" value="-"></input>
+                  </form>
+                </td>
+              {% endif %}
+            </tr>  
+          {% endfor %}
+        </tbody>
+      </table>
+      <span>
+        {% if page != 1 %}
+          <a href="?per_page={{ per_page }}&page=1">First page</a>
         {% endif %}
-        {% for food in page_foods %}
-          <tr>
-            <td style="text-align:right;border:1px solid">{{ food['name'] }}</td>
-            <td style="text-align:right;border:1px solid">{{ food['price'] }}</td>
-            {% if user_name is not none %}
-              <td style="text-align:right;border:1px solid">
-                {{ food['quantity'] }}
-                <form method="POST" action="{{ here() }}" style="display:inline">
-                  <input type="hidden" name="food_id" value="{{food['id']}}"></input>
-                  <input type="hidden" name="action" value="+"></input>
-                  <input type="submit" value="+"></input>
-                </form>
-                <form method="POST" action="{{ here() }}" style="display:inline">
-                  <input type="hidden" name="food_id" value="{{food['id']}}"></input>
-                  <input type="hidden" name="action" value="-"></input>
-                  <input type="submit" value="-"></input>
-                </form>
-              </td>
-            {% endif %}
-          </tr>  
-        {% endfor %}
-      </tbody>
-    </table>
-    <span>
-      {% if page != 1 %}
-        <a href="?per_page={{ per_page }}&page=1">First page</a>
-      {% endif %}
-      {% if page > 1 %}
-        <a href="?per_page={{ per_page }}&page={{ page - 1}}">Previous page</a>
-      {% endif %}
-      {% if page < pages %}
-        <a href="?per_page={{ per_page }}&page={{ page + 1}}">Next page</a>
-      {% endif %}
-      {% if page != pages %}
-        <a href="?per_page={{ per_page }}&page={{ pages }}">Last page</a>
-      {% endif %}
-    </span>
+        {% if page > 1 %}
+          <a href="?per_page={{ per_page }}&page={{ page - 1}}">Previous page</a>
+        {% endif %}
+        {% if page < pages %}
+          <a href="?per_page={{ per_page }}&page={{ page + 1}}">Next page</a>
+        {% endif %}
+        {% if page != pages %}
+          <a href="?per_page={{ per_page }}&page={{ pages }}">Last page</a>
+        {% endif %}
+      </span>
+    {% else %}
+      <p>Error: <em>Foods not available</em></p>
+    {% endif %}
   </form>
 {% endblock  %}
