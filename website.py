@@ -1,6 +1,7 @@
 import requests
 from datetime import datetime
 import simplejson
+from urllib.parse import unquote as urldecode
 
 import flask
 
@@ -74,7 +75,7 @@ def index():
 @app.route('/register', methods=['GET'])
 def register():
     if 'redirect_to' in flask.request.args:
-        flask.session['redirect_to'] = flask.request.args['regirect_to']
+        flask.session['redirect_to'] = urldecode(flask.request.args['redirect_to'])
 
     if flask.session.user_id is not None:
         return flask.redirect('/me')
@@ -101,7 +102,8 @@ def post_to_register():
 @app.route('/sign_in', methods=['GET'])
 def sign_in():
     if 'redirect_to' in flask.request.args:
-        flask.session['redirect_to'] = flask.request.args['regirect_to']
+        flask.session['redirect_to'] = urldecode(flask.request.args['redirect_to'])
+        print(flask.session['redirect_to'])
 
     if flask.session.user_id is not None:
         return flask.redirect('/profile')
@@ -162,7 +164,38 @@ def patch_me():
 
 @app.route('/foods/', methods=['GET'])
 def foods():
-    return flask.render_template('foods.html')
+    user_name = None
+    if flask.session.user_id is not None:
+        user_response = requests.get(service_uris['users'] + '/' + str(flask.session.user_id))
+        if user_response.status_code != 200:
+            return flask.render_template('error.html', reason=user_response.json()), 500
+
+        user = user_response.json()
+        user_name = user['name']
+
+    per_page = int(flask.request.args.get('per_page', 20))
+    page = int(flask.request.args.get('page', 1))
+    foods_response = requests.get(service_uris['foods'], params={
+        'results_per_page': per_page,
+        'page': page,
+    })
+    if foods_response.status_code != 200:
+        return flask.render_template('error.html', reason=foods_response.json()), 500
+
+    foods = foods_response.json()
+
+    flask.session.setdefault('cart', {})
+    for food in foods['objects']:
+        food['quantity'] = flask.session['cart'].get(food['id'], 0)
+
+    pages = foods['total_pages']
+    page_foods = foods['objects']
+
+    return flask.render_template('foods.html', user_name=user_name,
+                                               page_foods=page_foods,
+                                               per_page=per_page,
+                                               page=page,
+                                               pages=pages)
 
 
 if __name__ == '__main__':

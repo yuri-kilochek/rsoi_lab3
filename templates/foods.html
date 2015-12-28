@@ -1,0 +1,39 @@
+{% extends "page.html" %}
+
+{% block title %}Foods - {{ super() }}{% endblock %}
+
+{% block body %}
+  <h1>Foods</h1>
+  <form method="POST">
+    {% if user_name is none %}
+    <a href="/sign_in?redirect_to={{ '/foods?per_page=' | urlencode }}{{ per_page }}{{ '&page=' | urlencode }}{{ page }}">Sign in!</a>
+    {% else %}
+      <a href="/me">{{ user_name }}</a>
+    {% endif%}
+    <table>
+      <tbody>
+        {% for food in page_foods %}
+          <tr>
+            <td>{{ food['name'] }}</td>
+            <td style="text-align:right">{{ food['price'] }}</td>
+            <td style="text-align:right">{{ food['quantity'] }}</td>
+          </tr>  
+        {% endfor %}
+      </tbody>
+    </table>
+    <span>
+      {% if page != 1 %}
+        <a href="?per_page={{ per_page }}&page=1">First page</a>
+      {% endif %}
+      {% if page > 1 %}
+        <a href="?per_page={{ per_page }}&page={{ page - 1}}">Previous page</a>
+      {% endif %}
+      {% if page < pages %}
+        <a href="?per_page={{ per_page }}&page={{ page + 1}}">Next page</a>
+      {% endif %}
+      {% if page != pages %}
+        <a href="?per_page={{ per_page }}&page={{ pages }}">Last page</a>
+      {% endif %}
+    </span>
+  </form>
+{% endblock  %}
